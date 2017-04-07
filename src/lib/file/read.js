@@ -33,16 +33,24 @@ function readFileFromServer(chunkCallback, endCallback, serverSocket) {
     }
 
     serverSocket.emit('upload', req);
+    if (req.end) {
+      serverSocket.close();
+    }
   };
 }
 
 export default function readFile(chunkCallback, endCallback, brokerSocket) {
   const oFile = document.getElementById('file').files[0];
   brokerSocket.on('upload_getServer', res => {
-    let serverSocket = io.connect(res.server);
-    serverSocket.on('connect', () => {
-      readFileFromServer(chunkCallback, endCallback, serverSocket);
-    });
+    console.log(res);
+    if (res.status) {
+      let serverSocket = io.connect(res.server);
+      serverSocket.on('connect', () => {
+        readFileFromServer(chunkCallback, endCallback, serverSocket);
+      });
+    } else {
+      alert(res.message);
+    }
   });
   brokerSocket.emit('upload_getServer', { filename: oFile.name });
 }

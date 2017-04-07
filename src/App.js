@@ -7,7 +7,6 @@ import Reader from './components/File/Reader';
 
 const brokerIp = 'http://localhost:8080/client';
 // Get this from broker
-let movieList;
 const mimeCodec = 'video/webm; codecs="vorbis,vp8"';
 let canAccessBuffer;
 
@@ -29,7 +28,12 @@ function play(serverSocket, media) {
 
     sourceBuffer.onupdateend = () => {
       console.log('Ended, requesting next');
-      if (canAccessBuffer) serverSocket.emit('download', { filename });
+      if (canAccessBuffer) {
+        serverSocket.emit('download', { filename });
+      } else {
+        console.log('end');
+        serverSocket.close();
+      }
     };
 
     serverSocket.on('download_init', res => {
@@ -48,6 +52,7 @@ function play(serverSocket, media) {
         }
       } else {
         console.log('end');
+        serverSocket.close();
       }
     });
   });
@@ -59,17 +64,17 @@ class App extends Component {
     canUpload: true,
     canSelect: true,
     connected: false,
-    media: ''
+    media: '',
+    mediaList: ['']
   };
   brokerSocket = null;
   serverSocket = null;
 
   componentWillMount = () => {
-    console.log('Init socket');
     this.brokerSocket = io.connect(brokerIp);
-    console.log('socket', this.brokerSocket);
+
     this.brokerSocket.on('connect', () => {
-      console.log('connected to broker');
+      console.log('Connected to broker');
       this.setState({ connected: true });
     });
     this.brokerSocket.on('error', err => {
@@ -79,8 +84,8 @@ class App extends Component {
       this.setState({ connected: false });
     });
     this.brokerSocket.on('list_files', res => {
-      movieList = res.files;
-      console.log(`Files: ${movieList}`);
+      this.setState({ mediaList: ['', ...res.files] });
+      console.log(`Files: ${res.files}`);
     });
     this.brokerSocket.on('download_getServer', res => {
       this.serverSocket = io.connect(res.server);
@@ -103,6 +108,7 @@ class App extends Component {
 
   handleReadEnd = () => {
     this.setState({ loaded: 0, canUpload: true });
+    this.brokerSocket.emit('list_files');
     alert('File uploaded!');
   };
 
@@ -151,7 +157,7 @@ class App extends Component {
             disabled={!this.state.canSelect}
             onChange={this.handleMediaSelection}
           >
-            {['', ...movieList].map(elem => (
+            {this.state.mediaList.map(elem => (
               <option value={elem} key={`movie-${elem}`}>
                 {elem}
               </option>
