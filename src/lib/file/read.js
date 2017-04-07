@@ -1,7 +1,10 @@
-export default function readFile(chunkCallback, endCallback, serverSocket) {
+import io from 'socket.io-client';
+
+function readFileFromServer(chunkCallback, endCallback, serverSocket) {
   const oFile = document.getElementById('file').files[0];
   const unit = 512 * 1024;
   let read = 0;
+  let first = true;
 
   const reader = new FileReader();
   reader.readAsArrayBuffer(oFile.slice(read, read + unit));
@@ -14,17 +17,32 @@ export default function readFile(chunkCallback, endCallback, serverSocket) {
     let bytes = e.target.result;
     read += unit;
 
-    serverSocket.emit('upload', {
-      filename: oFile.name,
-      data: bytes
-    });
-
+    let req = { filename: oFile.name, fileSize: oFile.size, data: bytes };
     if (read < oFile.size) {
       chunkCallback(null, read, oFile.size);
       let blob = oFile.slice(read, read + unit);
       reader.readAsArrayBuffer(blob);
     } else {
+      req.end = true;
       endCallback();
     }
+
+    if (first) {
+      req.first = true;
+      first = false;
+    }
+
+    serverSocket.emit('upload', req);
   };
+}
+
+export default function readFile(chunkCallback, endCallback, brokerSocket) {
+  const oFile = document.getElementById('file').files[0];
+  brokerSocket.on('upload_getServer', res => {
+    let serverSocket = io.connect(res.server);
+    serverSocket.on('connect', () => {
+      readFileFromServer(chunkCallback, endCallback, serverSocket);
+    });
+  });
+  brokerSocket.emit('upload_getServer', { filename: oFile.name });
 }

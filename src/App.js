@@ -5,9 +5,9 @@ import { AppBody, AppHeader, AppLogo, AppTitle } from './components/App';
 import logo from './spotiflix-logo.png';
 import Reader from './components/File/Reader';
 
-const serverIp = 'http://192.168.1.190:9000';
+const brokerIp = 'http://localhost:8080/client';
 // Get this from broker
-const movieList = ['nyancat.webm', 'lalaland.webm'];
+let movieList;
 const mimeCodec = 'video/webm; codecs="vorbis,vp8"';
 let canAccessBuffer;
 
@@ -61,17 +61,37 @@ class App extends Component {
     connected: false,
     media: ''
   };
+  brokerSocket = null;
   serverSocket = null;
 
   componentWillMount = () => {
     console.log('Init socket');
-    this.serverSocket = io.connect(serverIp);
-    this.serverSocket.on('connect', () => {
+    this.brokerSocket = io.connect(brokerIp);
+    console.log('socket', this.brokerSocket);
+    this.brokerSocket.on('connect', () => {
+      console.log('connected to broker');
       this.setState({ connected: true });
     });
-    this.serverSocket.on('disconnect', () => {
+    this.brokerSocket.on('error', err => {
+      console.log('Socket err', err);
+    });
+    this.brokerSocket.on('disconnect', () => {
       this.setState({ connected: false });
     });
+    this.brokerSocket.on('list_files', res => {
+      movieList = res.files;
+      console.log(`Files: ${movieList}`);
+    });
+    this.brokerSocket.on('download_getServer', res => {
+      this.serverSocket = io.connect(res.server);
+      this.serverSocket.on('connect', () => {
+        this.setState({ canSelect: false });
+        canAccessBuffer = true;
+        play(this.serverSocket, this.state.media);
+      });
+    });
+
+    this.brokerSocket.emit('list_files');
   };
 
   handleChunkRead = (err, read, size) => {
@@ -92,11 +112,11 @@ class App extends Component {
 
   handlePlay = () => {
     if (this.state.media && this.state.connected) {
-      this.setState({ canSelect: false });
-      canAccessBuffer = true;
-      play(this.serverSocket, this.state.media);
+      this.brokerSocket.emit('download_getServer', {
+        filename: this.state.media
+      });
     } else {
-      alert('Please select a file!');
+      alert('Please select media!');
     }
   };
 
@@ -114,7 +134,7 @@ class App extends Component {
           <AppTitle>Welcome to SpotiFlix</AppTitle>
         </AppHeader>
         <Reader
-          serverSocket={this.serverSocket}
+          brokerSocket={this.brokerSocket}
           chunkCallback={this.handleChunkRead}
           endCallback={this.handleReadEnd}
           canUpload={this.state.canUpload}

@@ -1,7 +1,7 @@
 import React from 'react';
 import readFile from '../../lib/file/read';
 
-function Reader({ serverSocket, chunkCallback, endCallback, canUpload }) {
+function Reader({ brokerSocket, chunkCallback, endCallback, canUpload }) {
   return (
     <div>
       <label htmlFor="file">Add a song or video: </label>
@@ -10,7 +10,7 @@ function Reader({ serverSocket, chunkCallback, endCallback, canUpload }) {
         id="file"
         name="file"
         disabled={!canUpload}
-        onChange={() => readFile(chunkCallback, endCallback, serverSocket)}
+        onChange={() => readFile(chunkCallback, endCallback, brokerSocket)}
         accept="video/webm"
       />
     </div>
