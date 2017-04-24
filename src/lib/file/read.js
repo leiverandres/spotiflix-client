@@ -3,7 +3,7 @@ import io from 'socket.io-client';
 function readFileFromServer(chunkCallback, endCallback, serverSocket) {
   const oFile = document.getElementById('file').files[0];
   const unit = 512 * 1024;
-  let read = 0;
+  let read = 0, partNo = 0;
   let first = true;
 
   const reader = new FileReader();
@@ -16,26 +16,39 @@ function readFileFromServer(chunkCallback, endCallback, serverSocket) {
   reader.onload = e => {
     let bytes = e.target.result;
     read += unit;
+    partNo++;
 
-    let req = { filename: oFile.name, fileSize: oFile.size, data: bytes };
+    let req = {
+      filename: oFile.name,
+      fileSize: oFile.size,
+      data: bytes,
+      partNo
+    };
+
+    if (first) {
+      serverSocket.emit('upload_first', req);
+    }
+
     if (read < oFile.size) {
       chunkCallback(null, read, oFile.size);
+      if (!first) {
+        serverSocket.emit('upload', req);
+      } else {
+        first = false;
+      }
       let blob = oFile.slice(read, read + unit);
       reader.readAsArrayBuffer(blob);
     } else {
-      req.end = true;
+      serverSocket.emit('upload_end', req);
       endCallback();
     }
 
-    if (first) {
-      req.first = true;
-      first = false;
-    }
-
-    serverSocket.emit('upload', req);
-    if (req.end) {
-      serverSocket.close();
-    }
+    serverSocket.on('upload', data => {
+      if (!data.status) {
+        alert(data.message);
+        return;
+      }
+    });
   };
 }
 
